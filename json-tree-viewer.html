@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JSON Tree Viewer</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsonrepair@3/lib/umd/jsonrepair.js"></script>
+    <link rel="stylesheet" href="json-tree-viewer.css">
+</head>
+<body>
+    <div class="container">
+        <div class="content">
+            <div class="panel">
+                <h2>JSON Input</h2>
+                <div id="jsonInput" class="json-input-container"></div>
+                <div class="button-group">
+                    <button onclick="visualizeJSON()">Visualize</button>
+                    <button onclick="editJSON()">Edit JSON</button>
+                    <button id="fixBtn" class="fix" onclick="fixJSON()" style="display:none">Fix JSON</button>
+                    <button class="clear" onclick="clearAll()">Clear</button>
+                </div>
+            </div>
+            <div class="panel">
+                <h2>Tree Visualization
+                    <span class="info-icon" tabindex="0" data-tooltip="Drag with the left mouse button to pan, and scroll to zoom. Click a node to expand or collapse it.">i</span>
+                </h2>
+                <div class="tree-container">
+                    <div id="treeOutput" class="empty-state">
+                        Enter JSON above and click "Visualize"
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="popover" class="popover">
+        <div class="popover-content"></div>
+    </div>
+
+    <script src="json-tree-viewer.js"></script>
+</body>
+</html>

@@ -1,0 +1,466 @@
+{
+  "schemaVersion": "2.0",
+  "globalConfiguration": {
+    "developerName": "SMA_V2",
+    "label": "SMA V2",
+    "description": "Help sales reps through every step of the sales process. Automate time-consuming tasks such as record updates, get timely and data-informed suggestions, and more. Customize your agent with skills to fit your sales team's needs.",
+    "agentType": "AgentforceEmployeeAgent",
+    "enableEnhancedEventLogs": false,
+    "contextVariables": []
+  },
+  "agentVersion": {
+    "developerName": "v2",
+    "company": "Your company specializes in providing essential products and strategic solutions designed to enhance your customer's business performance. Its core offerings help companies improve efficiency and achieve their strategic objectives.",
+    "role": "You're an AI Sales agent that helps sales reps throughout the sales process. Your job is to keep records, such as opportunities, up to date, and provide suggestions for updating certain fields such as Next Step or Stage.",
+    "plannerType": "Atlas__ConcurrentMultiAgentOrchestration",
+    "systemMessages": [
+      {
+        "message": "Hi there! I'm your Sales Agent. I help you through every step of the sales process by automating time-consuming tasks like record updates and providing timely, data-informed suggestions. What would you like to work on today?",
+        "messageType": "Welcome"
+      },
+      {
+        "message": "Sorry, it looks like something has gone wrong. Let us start over.",
+        "messageType": "Error"
+      }
+    ],
+    "modalityParameters": {
+      "language": {
+        "defaultLocale": "en_US",
+        "additionalLocales": []
+      }
+    },
+    "additionalParameters": {},
+    "stateVariables": [
+      {
+        "developerName": "next_node",
+        "label": "Next Node Target",
+        "dataType": "string",
+        "isList": false,
+        "description": "State variable to control handoff routing between nodes",
+        "default": null
+      }
+    ],
+    "initialNode": "n_hub_router_16joB0000002Tp7",
+    "nodes": [
+      {
+        "developerName": "n_hub_router_16joB0000002Tp7",
+        "label": "Sales Management Router",
+        "description": "Hub node that routes user requests to specialized subagent nodes based on record type and intent",
+        "type": "subagent",
+        "reasoningType": "salesforce.default",
+        "beforeReasoning": [
+          {
+            "type": "action",
+            "target": "__state_update_action__",
+            "enabled": "'True'",
+            "stateUpdates": [
+              {
+                "next_node": "''"
+              }
+            ]
+          }
+        ],
+        "instructions": "You are the Sales Management Router - an intelligent routing agent that classifies user requests and routes them to specialized subagent nodes.\n\n# Your Role\n\n- Classify user requests by analyzing the utterance\n- Identify Salesforce records (Account, Opportunity, Lead, Contact, etc.) when mentioned\n- Route requests to appropriate specialist subagents based on record type\n- Handle out-of-scope requests directly or acknowledge limitations\n\n# Specialist Registry\n\nThe following specialist subagent(s) are available:\n\n1. **Account Specialist** (`n_spoke_account_specialist_16joB0000002Tp7`)\n   - Handles account-related queries for a specific account\n   - Routes to when: The identified record is an Account or Lead (record ID starts with '001' or '00Q')\n\n# Scope & Limitations\n\n- ONLY route to Account Specialist if the identified record is an Account or Lead\n- If the request is not about a specific record, or the record is not an Account/Lead, try to answer directly OR acknowledge that you cannot handle this request\n- When multiple records are found, present options and wait for user selection before routing\n\n# Response Style\n\n- Be helpful and professional\n- When routing to Account Specialist, clearly communicate that the request is being handled by the specialist\n- When presenting options, make them easy to understand and choose from\n- If the request is out of scope, try to answer directly OR acknowledge limitations and suggest what you can help with\n",
+        "focusPrompt": "# Routing Decision Process\n\n1. **Evaluate if the request is about a specific record**: Analyze the utterance to determine if it references a specific Salesforce record (Account, Opportunity, Lead, Contact, etc.)\n2. **If about a specific record**: Use `Record_Finder` tool to identify the record and get its details\n3. **Parse Record_Finder results** - Check the resultCount:\n   - **If resultCount == 1**: Extract record ID from full details, proceed to routing\n   - **If resultCount > 1**: Present options to user, wait for selection, then call Record_Finder again with selected record ID\n   - **If resultCount == 0**: Inform user no records found\n4. **After getting full details (resultCount == 1)**: Route based on record type - If Account/Lead, route to Account Specialist; otherwise handle directly or acknowledge limitations\n\n# Tool Usage\n\n## Record_Finder Tool\n\n- **When to call**: When the user mentions a record name (Account, Opportunity, Lead, Contact) or record ID, and you need to identify it\n- **How to identify**: Look for account names, opportunity names, lead names, contact names, or record IDs in the user's request\n- **Action**: Call `Record_Finder` tool to identify the record before routing to a specialist\n\n**Result Format - Check resultCount**:\n- Record_Finder always returns a response starting with \"resultCount: <number>\"\n- Parse the resultCount from the response\n\n**If resultCount == 1**:\n- Record_Finder returns: \"resultCount: 1\\n[comprehensive record details]\"\n- Extract the record ID from the details (look for record ID patterns like '001xxx', '00Qxxx', etc.)\n- Extract the object type from the details\n- Proceed directly to routing decision\n\n**If resultCount > 1**:\n- Record_Finder returns: \"resultCount: [number]\\n[numbered list of records]\"\n- Present these options to the user in a clear format\n- Format: \"I found multiple records matching '[name]'. Which one would you like to work with?\\n1. [Name] - [Object Type] (ID: [Record ID])\\n2. [Name] - [Object Type] (ID: [Record ID])\\n...\"\n- **STOP HERE** - Wait for the user to specify their choice. Do NOT call any tools or route until the user responds.\n- Once user selects, extract the record ID from the selected option\n- **CRITICAL**: Call Record_Finder again with the selected record ID to get full details\n- Record_Finder will return \"resultCount: 1\\n[full details]\" for the selected record\n- Extract record ID from the full details and proceed to routing decision\n\n**If resultCount == 0**:\n- Record_Finder returns: \"resultCount: 0\\nNo records found\"\n- Inform the user that no records were found\n\n**Examples**:\n- Single record: User says \"summarize acme\" → Call `Record_Finder` → Returns \"resultCount: 1\\n[comprehensive record details]\" → Extract record ID → Route to Account Specialist\n- Multiple records: User says \"tell me about acme\" → Call `Record_Finder` → Returns \"resultCount: 2\\n1. Acme Corp - Account (ID: 001xxx)\\n2. Acme Opportunity - Opportunity (ID: 006xxx)\" → Present options → User selects \"1\" or \"Acme Corp\" → Extract record ID (001xxx) → Call `Record_Finder` again with record ID \"001xxx\" → Returns \"resultCount: 1\\n[full details]\" → Extract record ID → Route to Account Specialist\n\n## Route_to_Account_Specialist Tool\n\n- **When to call**: When the identified record is an Account or Lead (record ID starts with '001' or '00Q')\n- **How to identify**: Check if the record's object type is \"Account\" or \"Lead\", or if the record ID starts with '001' or '00Q' from the Record_Finder results\n- **Action**: Call `Route_to_Account_Specialist` tool to route the request\n- **Example**: User says \"Generate POV for Acme\" → Record_Finder identifies it as Account → Call `Route_to_Account_Specialist`\n\n# Critical Guidelines\n\n- **CRITICAL**: Always check the resultCount from Record_Finder response\n- **CRITICAL**: If resultCount > 1, you MUST call Record_Finder again after user selection to get full details before routing\n- First evaluate if the request is about a specific record, then use `Record_Finder` tool only if needed\n- ONLY route to Account Specialist if the identified record is an Account or Lead (after getting full details with resultCount == 1)\n- When multiple matches are found (resultCount > 1), present them as options and wait for user selection\n- After user selects from multiple options, call Record_Finder again with the selected record ID to get full details\n- If the request is out of scope, try to help directly or acknowledge limitations\n",
+        "tools": [
+          {
+            "name": "Record_Finder",
+            "type": "supervision",
+            "target": "n_utility_record_finder_16joB0000002Tp7",
+            "description": "Search for and identify Salesforce records (Account, Opportunity, Lead, Contact, etc.) from user input. Can search by name or by ID. Can also fetch related records (e.g., given a Contact, get Opportunities). The Record_Finder will call its tools, parse the results, and return a formatted response. **IMPORTANT**: If a single record is found, the Record_Finder will automatically return comprehensive record details. If multiple records are found, you will receive a list of options. After calling this tool, wait for the Record_Finder to return its response. If multiple records are found, parse the list and present options to the user for selection."
+          },
+          {
+            "name": "Route_to_Account_Specialist",
+            "type": "action",
+            "target": "__state_update_action__",
+            "description": "Route to Account Specialist when the request involves an Account or Lead",
+            "stateUpdates": [
+              {
+                "next_node": "'n_spoke_account_specialist'"
+              }
+            ]
+          }
+        ],
+        "preToolCall": null,
+        "postToolCall": null,
+        "afterReasoning": null,
+        "afterAllToolCalls": [
+          {
+            "type": "handoff",
+            "target": "n_spoke_account_specialist_16joB0000002Tp7",
+            "enabled": "state.next_node == 'n_spoke_account_specialist'",
+            "stateUpdates": [
+              {
+                "next_node": "''"
+              }
+            ]
+          }
+        ],
+        "onInit": null,
+        "transitions": [],
+        "onExit": null,
+        "actionDefinitions": []
+      },
+      {
+        "developerName": "n_spoke_account_specialist_16joB0000002Tp7",
+        "label": "Account Specialist",
+        "description": "Specialist subagent that handles all account-related tasks including POV generation, account plans, meeting preparation, and strategic insights",
+        "type": "subagent",
+        "reasoningType": "salesforce.default",
+        "instructions": "You are the Account Specialist - a focused subagent that handles all account-related reasoning and synthesis tasks.\n\n# Your Role\n\n- Handle account-related queries for specific accounts and leads\n- Synthesize research data into actionable insights\n- Generate comprehensive account briefs, summaries, and meeting preparations\n- Provide strategic insights about accounts\n\n# Your Capabilities\n\n- **Account POV Generation**: Synthesize comprehensive account briefs from research data\n- **Account Plan Management**: Retrieve and manage account plans\n- **Account Summaries**: Generate quick summaries of Account records\n- **Meeting Preparation**: Prepare meeting summaries with context, strategy, and action items\n- **Strategic Insights**: Answer strategic questions about accounts\n- **Conversation Intelligence**: Analyze call transcripts and conversation data\n\n# How You Work\n\n- You receive requests routed from the Hub Router\n- You work with accounts and leads identified by Record Finder\n- You synthesize research data into actionable insights\n\n# Strict Limitations\n\n- ONLY account-related tasks - no Opportunity logic\n- If the request is out of scope → Return control to Hub\n\n# Response Style\n\n- Be direct and focused on account domain\n- Synthesize research data into actionable insights\n- If out of scope, politely explain and return to hub\n",
+        "focusPrompt": "# Task-Specific Guidance\n\n## Account POV Generation\n\nSynthesize comprehensive account briefs by combining:\n- Company research (from Research tool)\n- CRM context (from Get_Account_and_Account_Plan tool)\n- Conversation intelligence\n- Web research results\n\n## Meeting Preparation\n\nPrepare meeting summaries by synthesizing:\n- CRM context\n- Conversation intelligence\n- Activities timeline\n- Related notes\n\n# Tool Usage\n\n## Get_Account_and_Account_Plan Tool\n\n- **When to use**: When you need account details and associated account plan information for a specific account\n- **How to use**: Call this tool with the account ID to retrieve account record and account plan data\n- **What you get**: Account record data and account plan record (may be null if no account plan exists)\n\n## Research Tool\n\n- **When to use**: When you need external information about the account, company, or related people\n- **Use cases**:\n  - Company information, news, or market trends\n  - Competitor details or product comparisons\n  - Information about people associated with the account\n  - External context to enhance Salesforce data\n- **How it works**: The researcher works in the context of the current account and performs web searches to gather relevant information\n- **Action**: Call `Research` tool (via supervision) with your research query\n\n## Return_to_Hub Tool\n\n- **When to use**: If the current request is out of scope for this specialist (not an account-related task)\n- **Action**: Call the `Return_to_Hub` tool immediately\n- **What happens**: Routes the request back to the Hub Router, which will handle the out-of-scope request appropriately\n",
+        "tools": [
+          {
+            "name": "Get_Account_and_Account_Plan",
+            "type": "action",
+            "target": "GetAccountAndAccountPlan_179oB0000002EOf",
+            "description": "Queries account and one related account plan. Use this to retrieve account details and associated account plan information for a specific account.",
+            "llmInputs": [
+              "accountId"
+            ]
+          },
+          {
+            "name": "Research",
+            "type": "supervision",
+            "target": "n_utility_researcher_16joB0000002Tp7",
+            "description": "Perform people and company research via web search. Use this to research information about the account, company news, market trends, competitors, or related people. The researcher works in the context of the current account."
+          },
+          {
+            "name": "Return_to_Hub",
+            "type": "action",
+            "target": "__state_update_action__",
+            "description": "Return control to Hub Router when the request is out of scope (not an account-related task)",
+            "stateUpdates": [
+              {
+                "next_node": "'n_hub_router'"
+              }
+            ]
+          }
+        ],
+        "preToolCall": null,
+        "postToolCall": null,
+        "afterReasoning": null,
+        "afterAllToolCalls": [
+          {
+            "type": "handoff",
+            "target": "n_hub_router_16joB0000002Tp7",
+            "enabled": "state.next_node == 'n_hub_router'",
+            "stateUpdates": [
+              {
+                "next_node": "''"
+              }
+            ]
+          }
+        ],
+        "onInit": null,
+        "transitions": [],
+        "onExit": null,
+        "actionDefinitions": [
+          {
+            "developerName": "GetAccountAndAccountPlan_179oB0000002EOf",
+            "label": "Get Account and Account Plan",
+            "description": "Queries account and one related account plan.",
+            "requireUserConfirmation": false,
+            "includeInProgressIndicator": true,
+            "progressIndicatorMessage": "Retrieving records",
+            "invocationTargetType": "flow",
+            "invocationTargetName": "SalesAcctMgmt__GetAcctAndAcctPlan",
+            "inputType": [
+              {
+                "developerName": "accountId",
+                "label": "Account ID",
+                "description": "The Salesforce record ID of the account",
+                "dataType": "String",
+                "complexDataTypeName": null,
+                "isList": false,
+                "required": true,
+                "isUserInput": false
+              }
+            ],
+            "outputType": [
+              {
+                "developerName": "accountRecord",
+                "label": "Account Record",
+                "description": "The Account record data",
+                "dataType": "LightningTypes",
+                "complexDataTypeName": null,
+                "isList": false,
+                "isUsedByPlanner": true,
+                "isDisplayable": false
+              },
+              {
+                "developerName": "accountPlanRecord",
+                "label": "Account Plan Record",
+                "description": "The Account Plan record data (may be null if no account plan exists)",
+                "dataType": "LightningTypes",
+                "complexDataTypeName": null,
+                "isList": false,
+                "isUsedByPlanner": true,
+                "isDisplayable": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "developerName": "n_utility_record_finder_16joB0000002Tp7",
+        "label": "Record Finder",
+        "description": "Utility subagent that identifies records from user input via fuzzy search by name or ID, fetches related records, and returns comprehensive details for single matches",
+        "type": "subagent",
+        "reasoningType": "salesforce.default",
+        "instructions": "You are the Record Finder - a utility subagent that identifies Salesforce records from user input via fuzzy search and returns comprehensive details for single matches.\n\n# Your Role\n\n- Identify Salesforce records from user input via fuzzy search by name or ID\n- Fetch related records when requested\n- Return comprehensive record details for single matches automatically\n- Return formatted lists for multiple matches\n\n# Your Capabilities\n\n- Search records by name (fuzzy matching)\n- Search records by ID\n- Fetch related records\n- Return comprehensive record details for single matches\n- Return maximum 5 results for all fuzzy matches\n\n# How You Work\n\n- You are called via supervision from the Hub Router or other nodes\n- Determine the search type from the conversation context\n- Call the appropriate tool based on search type\n- Format and return results immediately\n\n# Response Format Requirements\n\n**CRITICAL**: Your response MUST always include a result count. Format your response as follows:\n\n- **resultCount: <number>** - Always include this at the start of your response\n  - `resultCount: 0` = No records found\n  - `resultCount: 1` = Single record found (include full details)\n  - `resultCount: 2+` = Multiple records found (include list)\n\n- **If resultCount == 1**: Include the full record details (comprehensive text blob from Get_Record_Details)\n- **If resultCount > 1**: Include a clear, numbered list of records (Name, Object Type, Record ID)\n- **If resultCount == 0**: Return \"No records found matching '[search term]'\"\n\n# Strict Limitations\n\n- ONLY record identification and detail retrieval - no domain logic, no reasoning, no synthesis\n- Pure utility - deterministic operations only\n- Always include resultCount in your response\n- Control returns immediately to the caller after returning results\n",
+        "focusPrompt": "# Search Type Determination\n\nDetermine the search type from the conversation context:\n- **Name search**: User mentions a record name → Use `Identify_Record_by_Name`\n- **ID search**: User provides a record ID (e.g., '001xxx', '006xxx') → Use `Query_Records` with \"Find the record with ID [ID]\" OR call `Get_Record_Details` directly with the record ID\n- **Specific record ID provided**: If the caller provides a specific record ID (not a search term), call `Get_Record_Details` directly with that ID and return full details with resultCount: 1\n- **Related records**: User asks for related records (e.g., \"Get Opportunities for Contact [ID]\") → Use `Query_Records` with relationship query and include \"limit to 5 results\" or \"return maximum 5 results\" in the query\n\n# Tool Usage\n\n## Identify_Record_by_Name Tool\n\n- **When to call**: When you need to identify a Salesforce record by NAME from the conversation\n- **How to use**: \n  * Extract the record name (or partial name) from the conversation context\n  * **REQUIRED PARAMETERS (use these exact parameter names)**:\n    - `recordName` (string): The partial record name to search for - accepts partial names, you don't need the full exact name\n    - `objectApiName` (string): The Salesforce object API name like \"Account\" or \"Opportunity\", or empty string `''` if object type is unknown\n  * **IMPORTANT**: Use the exact parameter names `recordName` and `objectApiName` - DO NOT use \"object\", \"Name\", \"ApiName\", or any other variations\n  * **IMPORTANT**: For `objectApiName` parameter:\n    - If the conversation context suggests the record type (e.g., \"Account\", \"Opportunity\"), pass the object API name (e.g., \"Account\", \"Opportunity\")\n    - If there's no clear indication of the object type, pass an empty string `''` to search across all object types\n  * Call `Identify_Record_by_Name` with both `recordName` (string) and `objectApiName` (string, or `''` if unknown)\n- **What to do with results**: \n  * **CRITICAL**: Check if `searchResults` is **non-empty** (has items in the array):\n    - If `searchResults` is **non-empty**, results were found - **STOP immediately** and use those results\n    - If `searchResults` is empty or not present, return \"resultCount: 0\\nNo records found matching '[name]'\"\n  * **Count the results**:\n    - If exactly 1 record: Call `Get_Record_Details` with the record ID, then return \"resultCount: 1\\n[full details from Get_Record_Details]\"\n    - If 2+ records: Return \"resultCount: [number]\\n[numbered list of records]\" (see Response Format section)\n  * **DO NOT call the tool again after getting results - return immediately**\n\n## Query_Records Tool\n\n- **When to call**: \n  * **ID search**: When you need to search by RECORD ID (e.g., \"001xxx\", \"006xxx\", \"00Qxxx\") - use query like \"Find the record with ID [ID]\" or \"Get record [ID]\"\n  * **Related records**: When you need to fetch related records (e.g., \"Get all Opportunities related to Contact [ID]\" or \"Find Opportunities for Account [ID]\") - use relationship query\n- **How to use**: \n  * For ID search: Extract the record ID and use query like \"Find the record with ID [ID]\" or \"Get record [ID]\" (no limit needed - ID queries always return exactly 1 result or 0 if not found)\n  * For related records: Use natural language query like \"Get all Opportunities related to Contact [ID] limit to 5 results\" or \"Find Opportunities for Account [ID] return maximum 5 results\"\n  * **IMPORTANT**: Only include \"limit to 5 results\" or \"return maximum 5 results\" for related records queries (not for ID searches, as ID queries always return 1 result)\n- **What to do with results**: \n  * **Count the results**:\n    - If exactly 1 record (ID search): Call `Get_Record_Details` with the record ID, then return \"resultCount: 1\\n[full details from Get_Record_Details]\"\n    - If multiple records (related records): Return \"resultCount: [number]\\n[clear list showing the related records]\"\n    - If no results: Return \"resultCount: 0\\nNo records found\"\n\n## Get_Record_Details Tool\n\n- **When to call**: \n  * When exactly 1 record is found from a search (name search or ID search)\n  * When called with a specific record ID (not a search term) - caller wants full details for a known record\n- **How to use**: \n  * Extract the record ID from the search results OR use the provided record ID\n  * Call `Get_Record_Details` with the `recordId` parameter\n  * Return the output from `Get_Record_Details` directly - this is a comprehensive text blob with all record details, fields, and related lists\n- **What to do with results**: \n  * Always prefix with \"resultCount: 1\\n\"\n  * Return \"resultCount: 1\\n[Get_Record_Details output]\" - do NOT format or modify the Get_Record_Details output\n  * This output contains comprehensive record information including all fields and related lists\n\n# Response Format\n\n**CRITICAL**: Always start your response with `resultCount: <number>`\n\n**SINGLE RECORD FOUND** (resultCount: 1):\n- Call `Get_Record_Details` with the record ID\n- Return: \"resultCount: 1\\n[Get_Record_Details output]\"\n- The Get_Record_Details output is a comprehensive text blob with all record details, fields, and related lists\n- Do NOT format as CSV - return the Get_Record_Details output as-is\n\n**MULTIPLE RECORDS FOUND** (resultCount: 2+):\n- Count the number of records found\n- Return: \"resultCount: [number]\\n[numbered list of records]\"\n- Format as a clear, numbered list showing: Record Name, Object Type, and Record ID\n- Example format:\n  ```\n  resultCount: 3\n\n  I found multiple records matching '[search term]':\n\n  1. [Name] - [Object Type] (ID: [Record ID])\n  2. [Name] - [Object Type] (ID: [Record ID])\n  3. [Name] - [Object Type] (ID: [Record ID])\n  ```\n- You can present this in a natural, readable format - the exact format is flexible as long as it clearly shows the options\n- Maximum 5 results for fuzzy matches\n\n**NO RESULTS FOUND** (resultCount: 0):\n- Return: \"resultCount: 0\\nNo records found matching '[search term]'\"\n\n**RELATED RECORDS** (when fetching related records):\n- Count the number of related records\n- Return: \"resultCount: [number]\\n[clear list showing the related records]\"\n- Maximum 5 results\n\n# Critical Guidelines\n\n**CRITICAL - STOP AFTER GETTING RESULTS**:\n- **HOW TO RECOGNIZE SUCCESS**: After calling a tool, check if `searchResults` is **non-empty** (has items in the array):\n  * If `searchResults` is **non-empty**, results were found - **STOP immediately** and use them\n  * If `searchResults` is empty or not present, return \"resultCount: 0\\nNo records found\"\n- **ALWAYS INCLUDE resultCount**: Every response must start with \"resultCount: <number>\"\n- **SINGLE RECORD**: If exactly 1 record found, call `Get_Record_Details` with the record ID and return \"resultCount: 1\\n[full details]\"\n- **MULTIPLE RECORDS**: If 2+ records found, return \"resultCount: [number]\\n[list of records]\"\n- After calling a tool and receiving **non-empty** `searchResults`, you MUST STOP and return immediately\n- DO NOT call the tool again if you already got results (even if the parameters were slightly wrong)\n- DO NOT retry with different parameter names or combinations\n- If the tool returned results (even with non-standard parameter names like \"object\" instead of \"objectApiName\"), use those results and return\n\nAfter calling a tool, you must:\n- **First**: Check if `searchResults` is **non-empty** (has items) - if yes, STOP and use the results\n- **Second**: Count the results and format response:\n  * If exactly 1 record: Call `Get_Record_Details` with the record ID and return \"resultCount: 1\\n[full details]\"\n  * If 2+ records: Return \"resultCount: [number]\\n[list of records]\"\n  * If 0 records: Return \"resultCount: 0\\nNo records found\"\n- Provide this formatted response as your final answer\n- **STOP - Do not call the tool again**\n",
+        "tools": [
+          {
+            "name": "Identify_Record_by_Name",
+            "type": "action",
+            "target": "IdentifyRecordByName_179oB0000003Mtd",
+            "description": "Search for Salesforce CRM records by name and returns a list of matching Salesforce CRM records.",
+            "llmInputs": [
+              "recordName",
+              "objectApiName"
+            ]
+          },
+          {
+            "name": "Query_Records",
+            "type": "action",
+            "target": "QueryRecords_179oB0000003Mtd",
+            "description": "Query Salesforce CRM records by ID or fetch related records. For ID search: extract the record ID and use query like 'Find the record with ID [ID]' (no limit needed - ID queries always return 1 result). For related records: use natural language query like 'Get all Opportunities related to Contact [ID] limit to 5 results' or 'Find Opportunities for Account [ID] return maximum 5 results' (always include 'limit to 5 results' or 'return maximum 5 results' for related records queries).",
+            "llmInputs": [
+              "query"
+            ],
+            "boundInputs": {
+              "customizationInstructions": "''"
+            }
+          },
+          {
+            "name": "Get_Record_Details",
+            "type": "action",
+            "target": "GetRecordDetails_179oB0000003Mtd",
+            "description": "Generates a comprehensive text blob containing record details, including object fields and values and records from related lists. Use this when exactly one record is found to return full record details automatically.",
+            "llmInputs": [
+              "recordId"
+            ]
+          }
+        ],
+        "preToolCall": null,
+        "postToolCall": null,
+        "afterReasoning": null,
+        "afterAllToolCalls": [],
+        "onInit": null,
+        "transitions": [],
+        "onExit": null,
+        "actionDefinitions": [
+          {
+            "developerName": "IdentifyRecordByName_179oB0000003Mtd",
+            "label": "Identify Record by Name",
+            "description": "Searches for Salesforce CRM records by name and returns a list of matching Salesforce CRM record IDs.",
+            "requireUserConfirmation": false,
+            "includeInProgressIndicator": true,
+            "progressIndicatorMessage": "Identifying record by name",
+            "invocationTargetType": "standardInvocableAction",
+            "invocationTargetName": "identifyRecordByName",
+            "inputType": [
+              {
+                "developerName": "recordName",
+                "label": "Record Name",
+                "description": "The name or title of the Salesforce record extracted from user input. The name can be used to find a Salesforce CRM record.",
+                "dataType": "String",
+                "complexDataTypeName": null,
+                "isList": false,
+                "required": true,
+                "isUserInput": false
+              },
+              {
+                "developerName": "objectApiName",
+                "label": "Object API Name",
+                "description": "The API name of the Salesforce object (such as Account or Opportunity) associated with the record the user wants to find. The name can be obtained from the context and does not always require the identifyObjectByName action. (eg. IdentifyRecordByName(recordName='Paul', objectApiName='user')). Leave empty to check with all possible objectApiNames. Only use objectApiName field if a particular objectApiName type has been identified for this record in earlier step, otherwise leave empty to increase recall and query all objectApiNames by default (eg. IdentifyRecordByName(recordName='Paul')).",
+                "dataType": "String",
+                "complexDataTypeName": null,
+                "isList": false,
+                "required": false,
+                "isUserInput": false
+              }
+            ],
+            "outputType": [
+              {
+                "developerName": "searchResults",
+                "label": "Search Results",
+                "description": "A list of the matching Salesforce record ids in descending order of relevance.",
+                "dataType": "LightningTypes",
+                "complexDataTypeName": null,
+                "isList": true,
+                "isUsedByPlanner": true,
+                "isDisplayable": false
+              }
+            ]
+          },
+          {
+            "developerName": "QueryRecords_179oB0000003Mtd",
+            "label": "Query Records",
+            "description": "Finds and retrieves Salesforce CRM records based on user input and specific conditions, such as field values. This action automatically identifies the correct records and object type. Use ONLY for ID-based searches.",
+            "requireUserConfirmation": false,
+            "includeInProgressIndicator": true,
+            "progressIndicatorMessage": "Querying records",
+            "invocationTargetType": "standardInvocableAction",
+            "invocationTargetName": "queryRecords",
+            "inputType": [
+              {
+                "developerName": "query",
+                "label": "Query",
+                "description": "The question or request from the user's input. The input must mention the Salesforce object type, such as Account, Lead, or Contact. Input should not contain any SOQL or SQL, but plain natural language in English. Do not generate SQL or SOQL. For ID searches, use format like 'Find the record with ID [ID]' or 'Get record [ID]'.",
+                "dataType": "String",
+                "complexDataTypeName": null,
+                "isList": false,
+                "required": true,
+                "isUserInput": false
+              },
+              {
+                "developerName": "customizationInstructions",
+                "label": "Customization Instructions",
+                "description": "Custom instructions for the action from the user's input to optimize the query.",
+                "dataType": "String",
+                "complexDataTypeName": null,
+                "isList": false,
+                "required": false,
+                "isUserInput": false
+              }
+            ],
+            "outputType": [
+              {
+                "developerName": "result",
+                "label": "Result",
+                "description": "A list of matching Salesforce CRM records with details about each record.",
+                "dataType": "LightningTypes",
+                "complexDataTypeName": null,
+                "isList": true,
+                "isUsedByPlanner": true,
+                "isDisplayable": false
+              }
+            ]
+          },
+          {
+            "developerName": "GetRecordDetails_179oB0000003Mtd",
+            "label": "Get Record Details",
+            "description": "Generates a text blob containing record details, including object fields and values and records from related lists.",
+            "requireUserConfirmation": false,
+            "includeInProgressIndicator": true,
+            "progressIndicatorMessage": "Getting details",
+            "invocationTargetType": "standardInvocableAction",
+            "invocationTargetName": "getDataForGrounding",
+            "inputType": [
+              {
+                "developerName": "recordId",
+                "label": "Record ID",
+                "description": "The Salesforce record ID for which to retrieve comprehensive details",
+                "dataType": "String",
+                "complexDataTypeName": null,
+                "isList": false,
+                "required": true,
+                "isUserInput": false
+              }
+            ],
+            "outputType": [
+              {
+                "developerName": "recordDetails",
+                "label": "Record Details",
+                "description": "A comprehensive text blob containing record details, including object fields and values and records from related lists.",
+                "dataType": "String",
+                "complexDataTypeName": null,
+                "isList": false,
+                "isUsedByPlanner": true,
+                "isDisplayable": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "developerName": "n_utility_researcher_16joB0000002Tp7",
+        "label": "Researcher",
+        "description": "Utility subagent that performs people and company research via web search",
+        "type": "subagent",
+        "reasoningType": "salesforce.default",
+        "instructions": "You are the Researcher - a utility subagent that performs people and company research via web search.\n\n# Your Role\n\n- Perform web searches for people and company information\n- Retrieve real-time or external information not available in Salesforce CRM\n- Provide context from the web to enhance Salesforce data\n\n# Your Capabilities\n\n- Research news, market trends, competitor details, and product comparisons\n- Gather information about companies and people\n- Provide external context to enhance Salesforce data\n\n# How You Work\n\n- You are called via supervision from the Account Specialist\n- You work in the context of a specific account (provided by the Account Specialist)\n- Extract the research query from the conversation context\n- Perform web search and return results immediately\n\n# Strict Limitations\n\n- ONLY research tasks - no domain logic, no reasoning, no synthesis\n- Pure utility - deterministic operations only\n- Do NOT ask the user questions - just perform the search and return results\n- Control returns immediately to the caller after returning research results\n",
+        "focusPrompt": "# Tool Usage\n\n## Web_Search Tool\n\n- **When to call**: When you need to search the web for information about a company, person, news, market trends, competitors, or products\n- **How to use**: \n  * Extract the research query from the conversation context\n  * Call `Web_Search` with the `searchQuery` parameter\n  * The query should be specific and focused on what information is needed\n- **What to do with results**: \n  * Parse the search results and return them in a clear, organized format\n  * Include relevant information about the company or person being researched\n  * Keep results focused and relevant to the research query\n  * If no relevant results found, clearly state that\n- **Example**: Account Specialist asks \"Research Acme Corp\" → Call `Web_Search` with query=\"Acme Corp company information news\" → Return research results\n\n# Response Format Guidelines\n\n- Provide research results in a clear, organized format\n- Include relevant information about the company or person being researched\n- Keep results focused and relevant to the research query\n- If no relevant results found, clearly state that\n\n# Important Notes\n\n- You are a utility node called via supervision\n- Always return research results in a clear format\n- Control returns immediately to the caller after returning research results\n",
+        "tools": [
+          {
+            "name": "Web_Search",
+            "type": "action",
+            "target": "WebSearch_179oB0000002GYX",
+            "description": "Retrieves real-time or external information that isn't available in Salesforce CRM. Use it for questions about news, market trends, competitor details, and product comparisons, or when Salesforce answers need added context from the web. Requires both a search query and a search provider.",
+            "llmInputs": [
+              "searchQuery"
+            ],
+            "boundInputs": {
+              "searchProvider": "''"
+            }
+          }
+        ],
+        "preToolCall": null,
+        "postToolCall": null,
+        "afterReasoning": null,
+        "afterAllToolCalls": [],
+        "onInit": null,
+        "transitions": [],
+        "onExit": null,
+        "actionDefinitions": [
+          {
+            "developerName": "WebSearch_179oB0000002GYX",
+            "label": "Search The Web",
+            "description": "Retrieves real-time or external information that isn't available in Salesforce CRM. Use it for questions about news, market trends, competitor details, and product comparisons, or when Salesforce answers need added context from the web.",
+            "requireUserConfirmation": false,
+            "includeInProgressIndicator": true,
+            "progressIndicatorMessage": "Searching the web",
+            "invocationTargetType": "standardInvocableAction",
+            "invocationTargetName": "webSearchStream",
+            "inputType": [
+              {
+                "developerName": "searchQuery",
+                "label": "Search Query",
+                "description": "Free-text input that specifies what the user wants to search for.",
+                "dataType": "String",
+                "complexDataTypeName": null,
+                "isList": false,
+                "required": true,
+                "isUserInput": true
+              },
+              {
+                "developerName": "searchProvider",
+                "label": "Search Provider",
+                "description": "The search provider used for web searches.",
+                "dataType": "String",
+                "complexDataTypeName": null,
+                "isList": false,
+                "required": false,
+                "isUserInput": false
+              }
+            ],
+            "outputType": [
+              {
+                "developerName": "summaryOfWebSearch",
+                "label": "Summary of Web Search",
+                "description": "A prompt that summarizes information from the web search for use in the action.",
+                "dataType": "LightningTypes",
+                "complexDataTypeName": null,
+                "isList": false,
+                "isUsedByPlanner": true,
+                "isDisplayable": false
+              },
+              {
+                "developerName": "citationSources",
+                "label": "Citation Sources",
+                "description": "Source links from the retrieved content used in the web search summary.",
+                "dataType": "ApexDefined",
+                "complexDataTypeName": "@apexClassType/AiCopilot__GenAiCitationInput",
+                "isList": false,
+                "isUsedByPlanner": true,
+                "isDisplayable": false
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
